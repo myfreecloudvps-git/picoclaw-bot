@@ -1,1 +1,1 @@
-web: python picoclaw/bot.py
+web: python picoclaw/bot_polling.py
