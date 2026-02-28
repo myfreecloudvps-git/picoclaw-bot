@@ -1,1 +1,1 @@
-web: gunicorn picoclaw.bot:app
+web: python picoclaw/bot.py
