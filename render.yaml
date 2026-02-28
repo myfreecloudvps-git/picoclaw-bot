@@ -3,9 +3,13 @@ services:
     name: picoclaw-bot
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn picoclaw.bot:app
+    startCommand: python picoclaw/bot.py
     envVars:
       - key: TELEGRAM_TOKEN
         sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: PORT
+        value: 10000
       - key: PYTHON_VERSION
         value: 3.11.6
