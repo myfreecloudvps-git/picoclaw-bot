@@ -1,8 +1,9 @@
 import asyncio
 import logging
+import threading
 from flask import Flask, request, jsonify
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from picoclaw.config import Config
 from picoclaw.handlers import start, help_command, info, echo, unknown
@@ -38,7 +39,22 @@ def init_bot():
     application.add_handler(CommandHandler("echo", echo))
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     
+    logger.info("Bot inizializzato correttamente")
     return application
+
+def set_webhook():
+    """Imposta il webhook su Telegram"""
+    try:
+        webhook_url = f"{Config.WEBHOOK_URL}/{Config.TELEGRAM_TOKEN}"
+        result = bot.set_webhook(url=webhook_url)
+        if result:
+            logger.info(f"✅ Webhook impostato: {webhook_url}")
+        else:
+            logger.error("❌ Impossibile impostare webhook")
+        return result
+    except Exception as e:
+        logger.error(f"❌ Errore impostazione webhook: {e}")
+        return False
 
 @app.route('/')
 def home():
@@ -46,7 +62,8 @@ def home():
     return jsonify({
         "status": "online",
         "bot": "PicoClaw",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "webhook_set": bot is not None
     })
 
 @app.route('/health')
@@ -58,28 +75,31 @@ def health():
 def webhook():
     """Endpoint webhook per Telegram"""
     try:
-        update = Update.de_json(request.get_json(force=True), bot)
+        json_data = request.get_json(force=True)
+        logger.info(f"📩 Ricevuto update: {json_data}")
+        
+        update = Update.de_json(json_data, bot)
+        
+        # Processa l'update in modo sincrono
         asyncio.run(application.process_update(update))
+        
+        logger.info("✅ Update processato")
         return 'OK', 200
+        
     except Exception as e:
-        logger.error(f"Errore webhook: {e}")
-        return 'Error', 500
+        logger.error(f"❌ Errore webhook: {e}")
+        return str(e), 500
 
-def set_webhook():
-    """Imposta il webhook su Telegram"""
-    webhook_url = f"{Config.WEBHOOK_URL}/{Config.TELEGRAM_TOKEN}"
-    bot.set_webhook(url=webhook_url)
-    logger.info(f"Webhook impostato: {webhook_url}")
+def run_flask():
+    """Avvia Flask server"""
+    app.run(host='0.0.0.0', port=Config.PORT, debug=False)
 
 if __name__ == '__main__':
-    # Inizializza
+    # Inizializza bot
     init_bot()
     
-    # Imposta webhook se in produzione
-    if Config.WEBHOOK_URL:
-        set_webhook()
-        app.run(host='0.0.0.0', port=Config.PORT)
-    else:
-        # Modalità polling per sviluppo locale
-        logger.info("Avvio in modalità polling...")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Imposta webhook
+    set_webhook()
+    
+    # Avvia Flask
+    run_flask()
